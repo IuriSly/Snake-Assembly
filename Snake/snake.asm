@@ -62,18 +62,26 @@ ENDM
     threadControl dd 0
 
     hBmpBody dd 0
+    hBmpFood dd 0
 
-    snakeStructure struct
+    pointStructure struct
         x dd ?
         y dd ?
-        a db 0
-    snakeStructure ends
+    pointStructure ends
 
     direction db 0
 
     snake_size dd 5
 
-    snake snakeStructure 225 dup(<0, 0, 0>)
+    snake pointStructure 225 dup(<0, 0>)
+
+    foodStructure struct
+        x dd ?
+        y dd ?
+        e dd 0
+    foodStructure ends
+
+    food foodStructure <475, 475, 1>
 
     rNumber dd 0
 
@@ -85,8 +93,8 @@ ENDM
 getRandomNumber proc uses eax
         invoke GetTickCount
         invoke nseed, eax
-        ; Random number de 0 a 11
-        invoke nrandom, 12
+        ; Random number de 0 a 19
+        invoke nrandom, 20
         mov rNumber, eax
         ret
 getRandomNumber endp
@@ -97,6 +105,9 @@ start:
 
     invoke LoadBitmap, hInstance, 100
     mov hBmpBody, eax
+
+    invoke LoadBitmap, hInstance, 101
+    mov hBmpFood, eax
 
     invoke GetCommandLine        ; provides the command line address
     mov CommandLine, eax
@@ -151,8 +162,8 @@ WinMain proc hInst     :DWORD,
         ; Centre window at following size
         ;================================
 
-        mov Wwd, 500
-        mov Wht, 500
+        mov Wwd, 520
+        mov Wht, 542
 
         invoke GetSystemMetrics,SM_CXSCREEN ; get screen width in pixels
         invoke TopXY,Wwd,eax
@@ -208,6 +219,7 @@ WndProc proc hWin   :DWORD,
 	LOCAL hDC	:DWORD
   LOCAL x:DWORD
   LOCAL y:DWORD
+  LOCAL count:DWORD
 
     .if uMsg == WM_COMMAND
 
@@ -233,27 +245,22 @@ WndProc proc hWin   :DWORD,
 
         mov dword ptr[esi], 100
         mov dword ptr[esi+4], 0
-        mov dword ptr[esi+8], 1
-        add esi, 9
+        add esi, 8
 
         mov dword ptr[esi], 75
         mov dword ptr[esi+4], 0
-        mov dword ptr[esi+8], 1
-        add esi, 9
+        add esi, 8
 
         mov dword ptr[esi], 50
         mov dword ptr[esi+4], 0
-        mov dword ptr[esi+8], 1
-        add esi, 9
+        add esi, 8
 
         mov dword ptr[esi], 25
         mov dword ptr[esi+4], 0
-        mov dword ptr[esi+8], 1
-        add esi, 9
+        add esi, 8
 
         mov dword ptr[esi], 0
         mov dword ptr[esi+4], 0
-        mov dword ptr[esi+8], 1
 
     .elseif uMsg == WM_KEYDOWN
         .if wParam == VK_LEFT
@@ -277,23 +284,34 @@ WndProc proc hWin   :DWORD,
         .endif
 
     .elseif uMsg == WM_MOVEMENT
-        ; Tenho q inverter como faco o esi, do final ao comeco...
+        mov esi, offset snake
+        mov eax, snake_size
+        sub eax, 2
+        mov ebx, 8
+        mul ebx
+        add esi, eax
+        mov count, 1
+
+        .while TRUE
+            mov eax, dword ptr[esi]
+            mov ebx, dword ptr[esi+4]
+
+            mov dword ptr[esi+8], eax
+            mov dword ptr[esi+12], ebx
+
+            sub esi, 8
+
+            inc count
+
+            mov eax, snake_size
+
+            .if count == eax
+                jmp endMove
+            .endif
+        .endw
+        endMove:
+
         .if direction == 0
-            mov esi, offset snake
-
-            .while TRUE
-                mov eax, dword ptr[esi]
-                mov ebx, dword ptr[esi+4]
-                add esi, 9
-                mov dword ptr[esi], eax
-                mov dword ptr[esi+4], ebx
-
-                .if byte ptr[esi+17] == 0
-                    jmp endMoveRight
-                .endif
-            .endw
-            endMoveRight:
-
             mov esi, offset snake
 
             .if dword ptr[snake] == 475
@@ -304,21 +322,6 @@ WndProc proc hWin   :DWORD,
         .elseif direction == 1
             mov esi, offset snake
 
-            .while TRUE
-                mov eax, dword ptr[esi]
-                mov ebx, dword ptr[esi+4]
-                add esi, 9
-                mov dword ptr[esi], eax
-                mov dword ptr[esi+4], ebx
-
-                .if byte ptr[esi+17] == 0
-                    jmp endMoveUp
-                .endif
-            .endw
-            endMoveUp:
-
-            mov esi, offset snake
-
             .if dword ptr[snake+4] == 0
                 mov dword ptr[snake+4], 475
             .else
@@ -327,42 +330,12 @@ WndProc proc hWin   :DWORD,
         .elseif direction == 2
             mov esi, offset snake
 
-            .while TRUE
-                mov eax, dword ptr[esi]
-                mov ebx, dword ptr[esi+4]
-                add esi, 9
-                mov dword ptr[esi], eax
-                mov dword ptr[esi+4], ebx
-
-                .if byte ptr[esi+17] == 0
-                    jmp endMoveLeft
-                .endif
-            .endw
-            endMoveLeft:
-
-            mov esi, offset snake
-
             .if dword ptr[snake] == 0
                 mov dword ptr[snake], 475
             .else
                 sub dword ptr[snake], 25
             .endif
         .elseif direction == 3
-            mov esi, offset snake
-
-            .while TRUE
-                mov eax, dword ptr[esi]
-                mov ebx, dword ptr[esi+4]
-                add esi, 9
-                mov dword ptr[esi], eax
-                mov dword ptr[esi+4], ebx
-
-                .if byte ptr[esi+17] == 0
-                    jmp endMoveDown
-                .endif
-            .endw
-            endMoveDown:
-
             mov esi, offset snake
 
             .if dword ptr[snake+4] == 475
@@ -409,35 +382,37 @@ Paint_Proc proc hWin:DWORD, hDC:DWORD
 
 	LOCAL hOld:DWORD
 	LOCAL memDC:DWORD
+  LOCAL count:DWORD
 
 	invoke  CreateCompatibleDC, hDC
 	mov	memDC, eax
 
   mov esi, offset snake
+  mov count, 0
 
   .while TRUE
       invoke SelectObject, memDC, hBmpBody
 
       invoke BitBlt, hDC, dword ptr[esi], dword ptr[esi+4], 25, 25, memDC, 0, 0, SRCCOPY
 
-      add esi, 9
+      add esi, 8
 
-      .if byte ptr[esi+8] == 0
+      inc count
+
+      mov eax, snake_size
+
+      .if count == eax
           jmp endPrintSnake
       .endif
   .endw
   endPrintSnake:
 
-  mov esi, offset snake
-  invoke wsprintfA, ADDR buffer, ADDR header_placar, dword ptr[esi]
+  invoke SelectObject, memDC, hBmpFood
+
+  invoke BitBlt, hDC, food.x, food.y, 25, 25, memDC, 0, 0, SRCCOPY
+
+  invoke wsprintfA, ADDR buffer, ADDR header_placar, snake_size
   invoke ExtTextOutA, hDC, 400, 0, ETO_CLIPPED, NULL, ADDR buffer, eax, NULL
-  invoke wsprintfA, ADDR buffer, ADDR header_placar, dword ptr[esi+4]
-  invoke ExtTextOutA, hDC, 300, 0, ETO_CLIPPED, NULL, ADDR buffer, eax, NULL
-  add esi, 9
-  invoke wsprintfA, ADDR buffer, ADDR header_placar, dword ptr[esi]
-  invoke ExtTextOutA, hDC, 400, 20, ETO_CLIPPED, NULL, ADDR buffer, eax, NULL
-  invoke wsprintfA, ADDR buffer, ADDR header_placar, dword ptr[esi+4]
-  invoke ExtTextOutA, hDC, 300, 20, ETO_CLIPPED, NULL, ADDR buffer, eax, NULL
 
 	invoke SelectObject, hDC, hOld
 	invoke DeleteDC, memDC
@@ -448,7 +423,7 @@ Paint_Proc endp
 ; --------------------- MainThread ------------------------
 MainThreadProc PROC USES ecx Param:DWORD
 
-    invoke WaitForSingleObject, hEventStart, 250
+    invoke WaitForSingleObject, hEventStart, 100
 
     .if eax == WAIT_TIMEOUT
         invoke PostMessage, hWnd, WM_MOVEMENT, NULL, NULL
